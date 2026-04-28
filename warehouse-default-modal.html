@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>仓库选择 - 添加默认</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            background-color: #f5f5f5; color: #333;
+            min-height: 100vh;
+        }
+
+        /* ===== 页面顶部（模拟PDA背景） ===== */
+        .page-header {
+            background-color: #fff; padding: 12px 16px;
+            display: flex; align-items: center; justify-content: space-between;
+            position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .header-left { display: flex; align-items: center; gap: 8px; }
+        .back-btn { font-size: 24px; color: #666; cursor: pointer; }
+        .header-title { font-size: 17px; font-weight: 600; color: #333; }
+        .header-right { font-size: 14px; color: #19A2B8; }
+
+        /* ===== 弹窗遮罩（始终显示） ===== */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(0,0,0,0.55); z-index: 200;
+            justify-content: center; align-items: flex-end;
+            display: flex;
+        }
+        .modal {
+            background-color: #fff; width: 100%; max-width: 420px;
+            border-radius: 16px 16px 0 0; max-height: 85vh;
+            display: flex; flex-direction: column; animation: slideUp 0.3s ease;
+        }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+        /* ===== 弹窗头部 ===== */
+        .modal-header {
+            padding: 16px; display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 1px solid #eee; position: relative;
+        }
+        .modal-reset { font-size: 14px; color: #666; cursor: pointer; }
+        .modal-title { font-size: 16px; font-weight: 600; color: #333; position: absolute; left: 50%; transform: translateX(-50%); }
+        .modal-close { font-size: 22px; color: #999; cursor: pointer; line-height: 1; z-index: 1; }
+
+        .modal-body { padding: 16px; overflow-y: auto; flex: 1; }
+
+        /* ===== 切换模式：我的默认 / 查看全部 ===== */
+        .mode-switch { display: flex; justify-content: center; gap: 24px; margin-bottom: 16px; }
+        .mode-option { display: flex; align-items: center; gap: 6px; font-size: 14px; color: #666; cursor: pointer; }
+        .mode-radio {
+            width: 20px; height: 20px; border: 2px solid #d9d9d9; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.2s; flex-shrink: 0;
+        }
+        .mode-radio.checked { border-color: #19A2B8; background-color: #19A2B8; }
+        .mode-radio.checked::after { content: ''; width: 8px; height: 8px; background: #fff; border-radius: 50%; }
+        .mode-count { color: #ff9933; font-size: 13px; }
+        .mode-label-checked { color: #333; font-weight: 500; }
+
+        /* ===== 选择全部按钮 ===== */
+        .select-all-btn {
+            width: 100%; padding: 12px; text-align: center;
+            background-color: #e6f5f8; color: #19A2B8; border: 1px solid #90d4df;
+            border-radius: 8px; font-size: 15px; cursor: pointer; margin-bottom: 12px;
+            transition: all 0.2s;
+        }
+        .select-all-btn:active { background-color: #d0ecef; }
+
+        /* ===== 空状态（我的默认无数据时） ===== */
+        .empty-state {
+            text-align: center; padding: 48px 20px 24px;
+        }
+        .empty-icon {
+            width: 80px; height: 80px; margin: 0 auto 16px;
+            background-color: #f5f5f5; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 36px;
+        }
+        .empty-title { font-size: 15px; color: #333; font-weight: 500; margin-bottom: 8px; }
+        .empty-desc { font-size: 13px; color: #999; line-height: 1.6; }
+        .empty-btn {
+            display: inline-block; margin-top: 16px; padding: 10px 28px;
+            background-color: #19A2B8; color: #fff; border-radius: 20px;
+            font-size: 14px; cursor: pointer; border: none;
+        }
+        .hidden { display: none !important; }
+
+        /* ===== 仓库列表 ===== */
+        .warehouse-list { }
+        .warehouse-item {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 14px 4px; border-bottom: 1px solid #f0f0f0;
+        }
+        .warehouse-name { font-size: 14px; color: #333; }
+        .checkbox-wrapper {
+            width: 24px; height: 24px; border: 2px solid #d9d9d9; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center; cursor: pointer;
+            transition: all 0.2s; flex-shrink: 0;
+        }
+        .checkbox-wrapper.checked { border-color: #19A2B8; background-color: #19A2B8; }
+        .checkbox-wrapper.checked::after {
+            content: '✓'; color: #fff; font-size: 14px; font-weight: bold;
+        }
+
+        /* ===== 提示文字 ===== */
+        .tip-text {
+            font-size: 12px; color: #ff9933; line-height: 1.7; margin-top: 16px;
+            padding: 12px; background-color: #fff9f0; border-radius: 6px;
+        }
+
+        /* ===== 底部按钮区 ===== */
+        .modal-footer { 
+            padding: 12px 16px 28px; display: flex; gap: 12px; 
+            border-top: 1px solid #eee; background: #fff;
+        }
+        .btn {
+            flex: 1; padding: 13px; border-radius: 6px; font-size: 15px;
+            text-align: center; cursor: pointer; border: none; font-weight: 500;
+        }
+        .btn-outline { background-color: #fff; color: #999; border: 1px solid #ddd; }
+        .btn-primary { background-color: #19A2B8; color: #fff; }
+        .btn-cyan { background-color: #19A2B8; color: #fff; }
+
+        /* ===== 二次确认弹窗 ===== */
+        .confirm-dialog {
+            display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(0,0,0,0.55); z-index: 250;
+            justify-content: center; align-items: center;
+        }
+        .confirm-dialog.show { display: flex; }
+        .confirm-box {
+            background-color: #fff; width: 80%; max-width: 300px;
+            border-radius: 12px; padding: 24px; text-align: center;
+        }
+        .confirm-title { font-size: 16px; font-weight: 600; color: #333; margin-bottom: 8px; }
+        .confirm-msg { font-size: 14px; color: #666; margin-bottom: 20px; line-height: 1.5; }
+        .confirm-btns { display: flex; gap: 12px; }
+        .confirm-btn {
+            flex: 1; padding: 10px; border-radius: 6px; font-size: 14px;
+            cursor: pointer; border: none; font-weight: 500;
+        }
+
+        /* ===== Toast 提示 ===== */
+        .toast {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background-color: rgba(0,0,0,0.75); color: #fff; padding: 12px 24px;
+            border-radius: 8px; font-size: 14px; z-index: 300; opacity: 0;
+            transition: opacity 0.3s; pointer-events: none;
+        }
+        .toast.show { opacity: 1; }
+    </style>
+</head>
+<body>
+
+<!-- 页面顶部 -->
+<div class="page-header">
+    <div class="header-left">
+        <span class="back-btn">‹</span>
+        <span class="header-title">出库任务</span>
+    </div>
+    <div class="header-right">9:34</div>
+</div>
+
+<!-- ========== 仓库选择弹窗（始终显示）========== -->
+<div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+        <!-- 头部 -->
+        <div class="modal-header">
+            <span class="modal-reset" onclick="resetAndClear()">重置清空</span>
+            <span class="modal-title">请选择仓库</span>
+            <span class="modal-close">×</span>
+        </div>
+
+        <!-- 内容区 -->
+        <div class="modal-body">
+            <!-- 模式切换 -->
+            <div class="mode-switch">
+                <div class="mode-option" onclick="switchMode('default')">
+                    <div class="mode-radio" id="radioDefault"></div>
+                    <span id="labelDefault">我的默认</span>
+                    <span class="mode-count" id="defaultCount">(0)</span>
+                </div>
+                <div class="mode-option" onclick="switchMode('all')">
+                    <div class="mode-radio checked" id="radioAll"></div>
+                    <span id="labelAll" class="mode-label-checked">查看全部</span>
+                </div>
+            </div>
+
+            <!-- 选择全部按钮 -->
+            <button class="select-all-btn" id="selectAllBtn" onclick="selectAll()">选择全部仓库</button>
+
+            <!-- 空状态 -->
+            <div class="empty-state hidden" id="emptyState">
+                <div class="empty-icon">📦</div>
+                <div class="empty-title">暂无默认仓库</div>
+                <div class="empty-desc">您还未设置默认仓库<br>请切换到"查看全部"选择仓库后添加为默认</div>
+                <button class="empty-btn" onclick="switchMode('all')">去添加默认</button>
+            </div>
+
+            <!-- 仓库列表 -->
+            <div class="warehouse-list" id="warehouseList"></div>
+
+            <!-- 提示文字 -->
+            <div class="tip-text">
+                根据设备添加缓存，可把选中的仓库，添加为我的默认，退出账号/设备更换，需要重新配置。<br>
+                相同设备，每次登陆可以配置默认选项
+            </div>
+        </div>
+
+        <!-- 底部按钮（动态渲染） -->
+        <div class="modal-footer" id="modalFooter"></div>
+    </div>
+</div>
+
+<!-- 二次确认弹窗 -->
+<div class="confirm-dialog" id="confirmDialog">
+    <div class="confirm-box">
+        <div class="confirm-title">⚠️ 确认清空</div>
+        <div class="confirm-msg">确定要清空默认仓库设置吗？<br>清开后不可恢复</div>
+        <div class="confirm-btns">
+            <button class="confirm-btn btn-outline" onclick="hideConfirmDialog()">取消</button>
+            <button class="confirm-btn" style="background:#19A2B8;color:#fff;" onclick="doClearDefault()">确定清空</button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ========== 数据 ==========
+const WAREHOUSES = [
+    { id: 'wh_001', name: '物流中心' },
+    { id: 'wh_002', name: '打包车间二' },
+    { id: 'wh_003', name: '成品仓A区' },
+    { id: 'wh_004', name: '原料仓一号库' },
+    { id: 'wh_005', name: '退货处理中心' },
+];
+
+let currentSelected = new Set();
+let defaultWarehouses = new Set();
+let currentMode = 'all';
+
+// ========== 初始化 ==========
+function init() {
+    renderWarehouseList();
+    updateUI();
+    updateFooterButtons();
+}
+
+// ========== 模式切换 ==========
+function switchMode(mode) {
+    currentMode = mode;
+
+    document.getElementById('radioDefault').classList.toggle('checked', mode === 'default');
+    document.getElementById('radioAll').classList.toggle('checked', mode === 'all');
+    document.getElementById('labelDefault').classList.toggle('mode-label-checked', mode === 'default');
+    document.getElementById('labelAll').classList.toggle('mode-label-checked', mode === 'all');
+
+    if (mode === 'default') {
+        currentSelected = defaultWarehouses.size > 0 ? new Set(defaultWarehouses) : new Set();
+    }
+
+    renderWarehouseList();
+    updateUI();
+    updateFooterButtons();
+}
+
+// ========== 底部按钮动态渲染 ==========
+function updateFooterButtons() {
+    const footer = document.getElementById('modalFooter');
+    if (currentMode === 'default') {
+        footer.innerHTML = `
+            <button class="btn btn-cyan" onclick="clearDefaultWithConfirm()" style="background:#19A2B8;">清空默认</button>
+            <button class="btn btn-cyan" onclick="confirmWarehouse()" style="background:#19A2B8;">确认查询</button>
+        `;
+    } else {
+        footer.innerHTML = `
+            <button class="btn btn-cyan" onclick="saveAsDefault()" style="background:#19A2B8;">添加为我的默认</button>
+            <button class="btn btn-cyan" onclick="confirmWarehouse()" style="background:#19A2B8;">确认查询</button>
+        `;
+    }
+}
+
+// ========== 清空默认（二次确认）==========
+function clearDefaultWithConfirm() {
+    if (defaultWarehouses.size === 0) { showToast('暂无默认设置'); return; }
+    showConfirmDialog();
+}
+
+function showConfirmDialog() {
+    document.getElementById('confirmDialog').classList.add('show');
+}
+function hideConfirmDialog() {
+    document.getElementById('confirmDialog').classList.remove('show');
+}
+
+function doClearDefault() {
+    defaultWarehouses.clear();
+    currentSelected.clear();
+
+    if (currentMode !== 'default') {
+        currentMode = 'default';
+        document.getElementById('radioDefault').classList.add('checked');
+        document.getElementById('radioAll').classList.remove('checked');
+        document.getElementById('labelDefault').classList.add('mode-label-checked');
+        document.getElementById('labelAll').classList.remove('mode-label-checked');
+        updateFooterButtons();
+    }
+
+    renderWarehouseList();
+    updateUI();
+    hideConfirmDialog();
+    showToast('已清空默认设置');
+}
+
+// ========== 核心逻辑 ==========
+function selectAll() {
+    WAREHOUSES.forEach(w => currentSelected.add(w.id));
+    renderWarehouseList();
+    updateUI();
+    showToast('已全选');
+}
+
+function resetAndClear() {
+    currentSelected.clear();
+    defaultWarehouses.clear();
+    renderWarehouseList();
+    updateUI();
+    updateDefaultCount();
+    showToast('已重置清空');
+}
+
+function saveAsDefault() {
+    if (currentSelected.size === 0) { showToast('请先选择仓库'); return; }
+    defaultWarehouses = new Set(currentSelected);
+    updateDefaultCount();
+
+    // 自动跳转到"我的默认"
+    currentMode = 'default';
+    document.getElementById('radioDefault').classList.add('checked');
+    document.getElementById('radioAll').classList.remove('checked');
+    document.getElementById('labelDefault').classList.add('mode-label-checked');
+    document.getElementById('labelAll').classList.remove('mode-label-checked');
+
+    renderWarehouseList();
+    updateUI();
+    updateFooterButtons();
+    showToast(`已保存 ${currentSelected.size} 个仓库为默认`);
+}
+
+function confirmWarehouse() {
+    if (currentSelected.size === 0) { showToast('请先选择仓库'); return; }
+    
+    // 关闭弹窗
+    document.getElementById('modalOverlay').style.display = 'none';
+    
+    // 显示已选仓库结果
+    showResult();
+    showToast(`已选择 ${currentSelected.size} 个仓库`);
+}
+
+// 显示已选结果页面
+function showResult() {
+    const names = WAREHOUSES.filter(w => currentSelected.has(w.id)).map(w => w.name);
+    document.body.innerHTML = `
+        <div class="page-header">
+            <div class="header-left">
+                <span class="back-btn" onclick="location.reload()">‹</span>
+                <span class="header-title">出库任务</span>
+            </div>
+            <div class="header-right">9:34</div>
+        </div>
+        <div style="padding:20px 16px;">
+            <div style="background:#fff;border-radius:12px;padding:24px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+                <div style="font-size:48px;margin-bottom:12px;">✅</div>
+                <div style="font-size:16px;color:#333;font-weight:600;margin-bottom:8px;">查询成功</div>
+                <div style="font-size:13px;color:#999;margin-bottom:20px;">已选择 ${currentSelected.size} 个仓库</div>
+                <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-bottom:24px;">
+                    ${names.map(n => `<span style="display:inline-flex;align-items:center;background:#e6f5f8;color:#19A2B8;padding:8px 14px;border-radius:20px;font-size:13px;">${n}</span>`).join('')}
+                </div>
+                <button onclick="location.reload()" style="display:inline-block;padding:12px 40px;background:#19A2B8;color:#fff;border:none;border-radius:6px;font-size:15px;cursor:pointer;">重新选择</button>
+            </div>
+        </div>
+    `;
+}
+
+function updateDefaultCount() {
+    document.getElementById('defaultCount').textContent = `(${defaultWarehouses.size})`;
+}
+
+// ========== 渲染列表 ==========
+function renderWarehouseList() {
+    const container = document.getElementById('warehouseList');
+    const emptyState = document.getElementById('emptyState');
+    const selectAllBtn = document.getElementById('selectAllBtn');
+
+    if (currentMode === 'default' && defaultWarehouses.size === 0) {
+        container.innerHTML = '';
+        emptyState.classList.remove('hidden');
+        selectAllBtn.classList.add('hidden');
+        return;
+    }
+
+    emptyState.classList.add('hidden');
+    selectAllBtn.classList.toggle('hidden', currentMode === 'default');
+
+    if (currentMode === 'default') {
+        const list = WAREHOUSES.filter(w => defaultWarehouses.has(w.id));
+        container.innerHTML = list.map(w => `
+            <div class="warehouse-item" data-id="${w.id}">
+                <span class="warehouse-name">${w.name}</span>
+                <div class="checkbox-wrapper ${currentSelected.has(w.id) ? 'checked' : ''}" 
+                     onclick="toggleWarehouse('${w.id}')"></div>
+            </div>
+        `).join('');
+    } else {
+        container.innerHTML = WAREHOUSES.map(w => `
+            <div class="warehouse-item" data-id="${w.id}">
+                <span class="warehouse-name">${w.name}</span>
+                <div class="checkbox-wrapper ${currentSelected.has(w.id) ? 'checked' : ''}" 
+                     onclick="toggleWarehouse('${w.id}')"></div>
+            </div>
+        `).join('');
+    }
+}
+
+function toggleWarehouse(id) {
+    if (currentSelected.has(id)) {
+        currentSelected.delete(id);
+    } else {
+        currentSelected.add(id);
+    }
+    const item = document.querySelector(`.warehouse-item[data-id="${id}"] .checkbox-wrapper`);
+    item.classList.toggle('checked');
+    updateUI();
+}
+
+function updateUI() {
+    const count = currentSelected.size;
+    // 可扩展：更新外部计数等
+}
+
+// ========== Toast ==========
+function showToast(msg) {
+    const toast = document.getElementById('toast');
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 1800);
+}
+
+window.onload = init;
+</script>
+
+</body>
+</html>
